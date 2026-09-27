@@ -1,7 +1,7 @@
 {
   "name": "irontrack-frontend-ui",
   "private": true,
-  "version": "2.12.0",
+  "version": "2.14.0",
   "description": "IronTrack UI dependency manifest",
   "dependencies": {
     "lucide": "0.556.0"

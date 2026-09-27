@@ -35,7 +35,7 @@ async def lifespan(app):
         if not os.getenv('MONGODB_URI','').strip():
             raise RuntimeError('MONGODB_URI è obbligatorio in produzione')
     ensure_admin(); yield
-app=FastAPI(title='IronTrack API',version='2.12.0',lifespan=lifespan)
+app=FastAPI(title='IronTrack API',version='2.14.0',lifespan=lifespan)
 origins=[x.strip() for x in os.getenv('FRONTEND_ORIGIN','http://localhost:5500,http://127.0.0.1:5500').split(',') if x.strip()]
 app.add_middleware(CORSMiddleware,allow_origins=origins,allow_origin_regex=r'^https?://(localhost|127\.0\.0\.1)(:\d+)?$' if os.getenv('ENVIRONMENT','development')!='production' else None,allow_credentials=True,allow_methods=['*'],allow_headers=['*'])
 
@@ -67,9 +67,19 @@ def admin_required(user=Depends(current_user)):
 
 def public_exercise(x):
     if not isinstance(x,dict):return x
-    # Normalize the main ExerciseDB V1/V2-ish shapes for the frontend.
     name=x.get('name','Esercizio'); eid=x.get('exerciseId') or x.get('id')
-    return {**x,'id':eid,'exerciseId':eid,'name':name,'imageUrl':x.get('imageUrl') or x.get('image') or x.get('gifUrl'),'gifUrl':x.get('gifUrl') or x.get('imageUrl'),'videoUrl':x.get('videoUrl'),'targetMuscles':x.get('targetMuscles') or ([x.get('target')] if x.get('target') else []),'bodyParts':x.get('bodyParts') or ([x.get('bodyPart')] if x.get('bodyPart') else []),'equipments':x.get('equipments') or ([x.get('equipment')] if x.get('equipment') else [])}
+    body_parts=x.get('bodyParts') or ([x.get('bodyPart')] if x.get('bodyPart') else [])
+    targets=x.get('targetMuscles') or ([x.get('target')] if x.get('target') else [])
+    equipment=x.get('equipments') or ([x.get('equipment')] if x.get('equipment') else [])
+    instructions=x.get('instructions') or x.get('steps') or []
+    overview=x.get('overview') or x.get('description') or x.get('summary') or ''
+    if isinstance(overview,list): overview=' '.join(str(v) for v in overview)
+    return {**x,'id':eid,'exerciseId':eid,'name':name,
+      'imageUrl':x.get('imageUrl') or x.get('image') or x.get('gifUrl'),'gifUrl':x.get('gifUrl') or x.get('imageUrl'),'videoUrl':x.get('videoUrl'),
+      'targetMuscles':targets,'bodyParts':body_parts,'equipments':equipment,'secondaryMuscles':x.get('secondaryMuscles') or [],
+      'instructions':instructions,'overview':overview,'description':overview,'exerciseTips':x.get('exerciseTips') or x.get('tips') or [],
+      'variations':x.get('variations') or [],'keywords':x.get('keywords') or [],'exerciseType':x.get('exerciseType') or x.get('category') or '',
+      'gender':x.get('gender') or '','difficulty':x.get('difficulty') or '','relatedExerciseIds':x.get('relatedExerciseIds') or []}
 
 @app.get('/health')
 def health():
@@ -282,11 +292,12 @@ async def exercisedb_request(path,params=None):
             r=await client.get(f'{base}{path}',params=params);r.raise_for_status();return r.json()
         except Exception as e:raise HTTPException(502,f'ExerciseDB non raggiungibile: {e}')
 @app.get('/api/exercises')
-async def exercises(q:str='',bodyPart:str='',equipment:str='',limit:int=30,offset:int=0,user=Depends(current_user)):
+async def exercises(q:str='',bodyPart:str='',equipment:str='',target:str='',limit:int=48,offset:int=0,user=Depends(current_user)):
     p={'limit':min(max(limit,1),100),'offset':max(offset,0)}
     if q:p['search']=q
     if bodyPart:p['bodyPart']=bodyPart
     if equipment:p['equipment']=equipment
+    if target:p['target']=target
     d=await exercisedb_request('/exercises',p)
     if isinstance(d,dict) and 'data' in d:d['data']=[public_exercise(x) for x in d['data']]
     elif isinstance(d,list):d=[public_exercise(x) for x in d]
