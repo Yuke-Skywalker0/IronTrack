@@ -1,23 +1,16 @@
 {
-  "name": "IronTrack \u2014 Gym Tracker",
+  "name": "IronTrack — Gym Tracker",
   "short_name": "IronTrack",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
-  "background_color": "#0b0d12",
-  "theme_color": "#8b5cf6",
-  "description": "Workout tracker personale con schede, esercizi e AI.",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#05070b",
+  "theme_color": "#07111f",
+  "description": "Workout tracker personale con schede, progressi, esercizi e AI.",
+  "orientation": "portrait-primary",
   "icons": [
-    {
-      "src": "./assets/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "./assets/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
-    }
+    {"src":"./assets/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any maskable"},
+    {"src":"./assets/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any maskable"}
   ]
 }

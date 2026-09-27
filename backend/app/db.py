@@ -32,6 +32,9 @@ class Store:
         self.db.measurements.create_index([('user_id', 1), ('recorded_at', -1)], name='measurements_user_recorded')
         self.db.shares.create_index('code', unique=True, name='shares_code_unique')
         self.db.shares.create_index('created_at', name='shares_created_at')
+        self.db.auth_tokens.create_index([('user_id', 1), ('type', 1)], name='auth_tokens_user_type')
+        self.db.auth_tokens.create_index('token_hash', unique=True, name='auth_tokens_hash_unique')
+        self.db.auth_tokens.create_index('expires_at', name='auth_tokens_expires')
 
     def _init_sqlite(self):
         self.conn.executescript('''
@@ -40,6 +43,7 @@ class Store:
         CREATE TABLE IF NOT EXISTS sessions(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,routine_id TEXT,routine_name TEXT,started_at TEXT NOT NULL,duration_min INTEGER DEFAULT 0,notes TEXT DEFAULT '',sets_json TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS shares(code TEXT PRIMARY KEY,routine_json TEXT NOT NULL,owner_id TEXT NOT NULL,created_at TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS measurements(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,recorded_at TEXT NOT NULL,weight_kg REAL,height_cm REAL,body_fat REAL,waist_cm REAL,chest_cm REAL,arm_cm REAL,thigh_cm REAL,notes TEXT DEFAULT '');
+        CREATE TABLE IF NOT EXISTS auth_tokens(id TEXT PRIMARY KEY,user_id TEXT NOT NULL,type TEXT NOT NULL,token_hash TEXT UNIQUE NOT NULL,created_at TEXT NOT NULL,expires_at TEXT NOT NULL,used_at TEXT);
         ''')
         # Safe migrations for DBs created by older builds.
         for col,typ in [('height_cm','REAL'),('weight_kg','REAL'),('notes','TEXT DEFAULT \'\'')]:
@@ -75,6 +79,28 @@ class Store:
             for k,v in allowed.items(): fields.append(f'{k}=?'); vals.append(v)
             if fields:self.conn.execute(f"UPDATE users SET {','.join(fields)} WHERE id=?",(*vals,uid_));self.conn.commit()
         return self.user_by_id(uid_)
+    def create_auth_token(self, user_id, token_hash, token_type, expires_at):
+        d={'id':uid(),'user_id':user_id,'type':token_type,'token_hash':token_hash,'created_at':now(),'expires_at':expires_at,'used_at':None}
+        if self.mongo:self.db.auth_tokens.insert_one(d)
+        else:self.conn.execute('INSERT INTO auth_tokens VALUES(?,?,?,?,?,?,?)',(d['id'],d['user_id'],d['type'],d['token_hash'],d['created_at'],d['expires_at'],None));self.conn.commit()
+        return d
+    def get_auth_token(self, token_hash, token_type):
+        if self.mongo:return self._doc(self.db.auth_tokens.find_one({'token_hash':token_hash,'type':token_type}))
+        return self._doc(self.conn.execute('SELECT * FROM auth_tokens WHERE token_hash=? AND type=?',(token_hash,token_type)).fetchone())
+    def invalidate_auth_tokens(self, user_id, token_type):
+        if self.mongo:self.db.auth_tokens.update_many({'user_id':user_id,'type':token_type,'used_at':None},{'$set':{'used_at':now()}})
+        else:self.conn.execute('UPDATE auth_tokens SET used_at=? WHERE user_id=? AND type=? AND used_at IS NULL',(now(),user_id,token_type));self.conn.commit()
+    def consume_auth_token(self, token_hash, token_type):
+        if self.mongo:
+            return self.db.auth_tokens.find_one_and_update({'token_hash':token_hash,'type':token_type,'used_at':None},{'$set':{'used_at':now()}})
+        row=self.conn.execute('SELECT * FROM auth_tokens WHERE token_hash=? AND type=? AND used_at IS NULL',(token_hash,token_type)).fetchone()
+        if row:self.conn.execute('UPDATE auth_tokens SET used_at=? WHERE token_hash=? AND type=? AND used_at IS NULL',(now(),token_hash,token_type));self.conn.commit()
+        return self._doc(row)
+    def upsert_google_user(self,email,name):
+        existing=self.user_by_email(email)
+        if existing:return existing
+        return self.create_user(email,'!google-oauth!'+secrets.token_hex(16),name or email.split('@')[0])
+
     def update_password(self,uid_,ph):
         if self.mongo:self.db.users.update_one({'id':uid_},{'$set':{'password_hash':ph}})
         else:self.conn.execute('UPDATE users SET password_hash=? WHERE id=?',(ph,uid_));self.conn.commit()

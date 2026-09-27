@@ -1,0 +1,15 @@
+{
+  "name": "irontrack_v211",
+  "version": "1.0.0",
+  "description": "App PWA mobile-first per allenamento personale, amici e profili gestiti dal Super Admin.",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}

@@ -1,1 +1,1 @@
-window.IRONTRACK_CONFIG = { API_BASE_URL: "" };
+window.IRONTRACK_CONFIG = { API_BASE_URL: "", GOOGLE_CLIENT_ID: "" };

@@ -16,6 +16,14 @@ services:
         value: gymapp
       - key: FRONTEND_ORIGIN
         sync: false
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
       - key: EXERCISEDB_BASE_URL
         value: https://oss.exercisedb.dev/api/v1
       - key: AI_BASE_URL

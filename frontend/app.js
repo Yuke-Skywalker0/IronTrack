@@ -22,6 +22,37 @@ async function api(path,opt={}){
     throw e;
   }finally{clearTimeout(timer)}
 }
+const ICON_MAP=[
+  [/^\s*\+?\s*Nuova/i,'plus'],[/^\s*Allenati/i,'dumbbell'],[/^\s*Modifica/i,'pencil'],[/^\s*Copia/i,'copy'],[/^\s*Vedi tutte/i,'list'],[/^\s*Salva scheda/i,'save'],[/^\s*\+?\s*Giorno/i,'calendar-plus'],[/^\s*\+?\s*Esercizio/i,'dumbbell'],[/^\s*Chiudi/i,'x'],[/^\s*Recupero/i,'timer'],[/^\s*Esci/i,'log-out'],[/^\s*Termina e salva/i,'check-circle-2'],[/^\s*Analisi/i,'chart-no-axes-combined'],[/^\s*\+?\s*Aggiungi/i,'plus'],[/^\s*Genera programma/i,'sparkles'],[/^\s*Salva profilo/i,'save'],[/^\s*Cambia password/i,'key-round'],[/^\s*Esci/i,'log-out'],[/^\s*Installa IronTrack/i,'download'],[/^\s*Come installare/i,'download'],[/^\s*Guida iPhone/i,'smartphone'],[/^\s*Copia link/i,'link'],[/^\s*Genera codice scheda/i,'share-2'],[/^\s*Importa scheda/i,'upload'],[/^\s*SUPER ADMIN/i,'shield-check'],[/^\s*Apri profilo/i,'user-round'],[/^\s*Salva/i,'save'],[/^\s*Continua/i,'arrow-right'],[/^\s*Accedi/i,'log-in'],[/^\s*Crea account/i,'user-plus'],[/^\s*Invia link/i,'mail'],[/^\s*Salva nuova password/i,'key-round']
+];
+function iconNameFor(text){
+  const t=String(text||'').replace(/\s+/g,' ').trim();
+  for(const [re,name] of ICON_MAP) if(re.test(t)) return name;
+  return null;
+}
+function refreshIcons(){
+  if(!window.lucide?.createIcons) return;
+  document.querySelectorAll('button:not([data-icon-ready="1"])').forEach(btn=>{
+    if(btn.querySelector('svg,.lucide')) return;
+    const text=btn.textContent.replace(/[\u{1F300}-\u{1FAFF}]/gu,'').replace(/[✓×＋←→↗⌂▤◉◷✦⚙☀☾◐]/g,'').trim();
+    const name=iconNameFor(text);
+    if(!name) return;
+    const i=document.createElement('i'); i.setAttribute('data-lucide',name); i.setAttribute('aria-hidden','true');
+    btn.prepend(i); btn.dataset.iconReady='1';
+  });
+  document.querySelectorAll('.bottomnav button').forEach(btn=>{
+    if(btn.querySelector('svg')) return;
+    const map={dashboard:'house',routines:'notebook-tabs',exercises:'dumbbell',history:'history',ai:'sparkles',profile:'settings',admin:'shield-check'};
+    const name=map[btn.dataset.page]; if(!name) return;
+    const i=document.createElement('i');i.setAttribute('data-lucide',name);i.setAttribute('aria-hidden','true');btn.prepend(i);
+  });
+  const themes={themeSystem:'monitor-smartphone',themeLight:'sun',themeDark:'moon'};
+  Object.entries(themes).forEach(([id,name])=>{const el=$(id);if(!el||el.querySelector('svg'))return;el.querySelector('span')?.remove();const i=document.createElement('i');i.setAttribute('data-lucide',name);i.setAttribute('aria-hidden','true');el.prepend(i);});
+  const si=document.querySelector('.settings-icon'); if(si&&!si.querySelector('svg')){si.textContent='';const i=document.createElement('i');i.setAttribute('data-lucide','palette');i.setAttribute('aria-hidden','true');si.appendChild(i);}
+  window.lucide.createIcons({attrs:{'stroke-width':2.25}});
+}
+function scheduleIconRefresh(){requestAnimationFrame(()=>setTimeout(refreshIcons,0));}
+
 function toast(t){$('toast').textContent=t;$('toast').classList.add('show');clearTimeout(window.__toast);window.__toast=setTimeout(()=>$('toast').classList.remove('show'),2600)}
 function empty(a,b){return `<div class="empty"><b>${esc(a)}</b><span>${esc(b)}</span></div>`}
 function formatTime(s){return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`}
@@ -37,7 +68,9 @@ function showResume(){const d=readDraft();if(!d)return;const r=routines.find(x=>
 function restoreDraft(d){const r=routines.find(x=>x.id===d.routineId);if(!r)return;startRoutine(r.id,d);$('resumeWorkout').classList.add('hidden')}
 
 async function boot(){
-  if(!token){$('auth').classList.remove('hidden');return}
+  const reset=new URLSearchParams(location.search).get('reset');
+  if(reset){$('auth').classList.remove('hidden');setAuthPanel('resetPasswordPanel');return}
+  if(!token){$('auth').classList.remove('hidden');initGoogleAuth();return}
   try{me=await api('/api/me');$('auth').classList.add('hidden');$('app').classList.remove('hidden');applySettings();await refresh();if(me.role==='admin')addAdminNav();showResume();}
   catch(e){console.warn(e);localStorage.removeItem('iron_token');token=null;$('auth').classList.remove('hidden');toast(e.message)}
 }
@@ -45,12 +78,14 @@ function applySettings(){
   document.body.classList.remove('light','dark');if(me.theme!=='system')document.body.classList.add(me.theme);
   document.documentElement.style.setProperty('--accent',me.accent||'#8b5cf6');
   if($('accentPicker'))$('accentPicker').value=me.accent||'#8b5cf6';
+  ['system','light','dark'].forEach(t=>$(t==='system'?'themeSystem':`theme${t[0].toUpperCase()+t.slice(1)}`)?.classList.toggle('selected',me.theme===t));
   $('greeting').textContent=`Ciao ${esc((me.name||'Atleta').split(' ')[0])}`;
   $('profileName').value=me.name||'';$('profileHeight').value=me.height_cm||'';$('profileWeight').value=me.weight_kg||'';$('profileNotes').value=me.notes||'';
+  updateInstallUI();scheduleIconRefresh();
 }
 async function refresh(){
   [routines,sessions,stats,measurements,progression]=await Promise.all([api('/api/routines'),api('/api/sessions'),api('/api/stats'),api('/api/measurements'),api('/api/progression').then(x=>x.exercises)]);
-  renderRoutines();renderDashboard();renderHistory();renderAnalytics();renderMeasurements();showResume();
+  renderRoutines();renderDashboard();renderHistory();renderAnalytics();renderMeasurements();showResume();scheduleIconRefresh();
 }
 function openPage(id){
   document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));$(id)?.classList.add('active');
@@ -65,8 +100,8 @@ function renderDashboard(){
 }
 function routineCard(r,admin=false){const days=r.days||[];return `<div class="card"><div class="card-title">${esc(r.name)}</div><div class="card-meta">${esc(r.folder||'')} · ${days.length} giorni · ${days.reduce((n,d)=>n+(d.exercises||[]).length,0)} esercizi</div>${r.description?`<p class="muted">${esc(r.description)}</p>`:''}<div class="card-actions">${!admin?`<button class="primary small" onclick="startRoutine('${r.id}')">Allenati</button><button class="secondary small" onclick="editRoutine('${r.id}')">Modifica</button><button class="secondary small" onclick="duplicateRoutine('${r.id}')">Copia</button><button class="danger small" onclick="deleteRoutine('${r.id}')">×</button>`:''}</div></div>`}
 function renderRoutines(){const q=($('routineSearch')?.value||'').toLowerCase();$('routineList').innerHTML=routines.filter(r=>(r.name||'').toLowerCase().includes(q)||(r.folder||'').toLowerCase().includes(q)).map(r=>routineCard(r)).join('')||empty('Nessun risultato','Prova un altro termine.')}
-function newRoutine(){$('builder').removeAttribute('data-admin-uid');$('builder').removeAttribute('data-admin-rid');editingId=null;builderDays=[{name:'Giorno 1',exercises:[]}];builderDay=0;$('builderTitle').textContent='Nuova scheda';$('routineName').value='';$('routineFolder').value='Le mie schede';$('routineDesc').value='';renderBuilder();openPage('builder')}
-function editRoutine(id){$('builder').removeAttribute('data-admin-uid');$('builder').removeAttribute('data-admin-rid');const r=routines.find(x=>x.id===id);if(!r)return;editingId=id;builderDays=JSON.parse(JSON.stringify(r.days||[]));if(!builderDays.length)builderDays=[{name:'Giorno 1',exercises:[]}];builderDay=0;$('builderTitle').textContent='Modifica scheda';$('routineName').value=r.name;$('routineFolder').value=r.folder||'';$('routineDesc').value=r.description||'';renderBuilder();openPage('builder')}
+function newRoutine(){$('builder').removeAttribute('data-admin-uid');$('builder').removeAttribute('data-admin-rid');editingId=null;builderDays=[{name:'Giorno 1',exercises:[]}];builderDay=0;$('builderTitle').textContent='Nuova scheda';$('routineName').value='';$('routineFolder').value='Le mie schede';$('routineDesc').value='';renderBuilder();scheduleIconRefresh();openPage('builder')}
+function editRoutine(id){$('builder').removeAttribute('data-admin-uid');$('builder').removeAttribute('data-admin-rid');const r=routines.find(x=>x.id===id);if(!r)return;editingId=id;builderDays=JSON.parse(JSON.stringify(r.days||[]));if(!builderDays.length)builderDays=[{name:'Giorno 1',exercises:[]}];builderDay=0;$('builderTitle').textContent='Modifica scheda';$('routineName').value=r.name;$('routineFolder').value=r.folder||'';$('routineDesc').value=r.description||'';renderBuilder();scheduleIconRefresh();openPage('builder')}
 function renderBuilder(){$('builderDays').innerHTML=builderDays.map((d,di)=>`<div class="panel builder-day ${di===builderDay?'selected':''}"><div class="section-head"><button class="day-tab" onclick="builderDay=${di};renderBuilder()">${esc(d.name)}</button><button class="danger ghost" onclick="removeBuilderDay(${di})">×</button></div>${(d.exercises||[]).map((e,ei)=>`<div class="builder-ex"><div class="ex-main"><b>${esc(e.name||'Esercizio')}</b><small>${esc(e.equipment||'')} ${e.exerciseId?'· ExerciseDB':''}</small></div><input type="number" min="1" value="${e.sets||3}" title="Serie" onchange="builderDays[${di}].exercises[${ei}].sets=+this.value"><input value="${esc(e.reps||'8-12')}" title="Reps" onchange="builderDays[${di}].exercises[${ei}].reps=this.value"><input type="number" min="0" max="5" value="${e.rir??1}" title="RIR" onchange="builderDays[${di}].exercises[${ei}].rir=+this.value"><button class="danger ghost" onclick="removeBuilderExercise(${di},${ei})">×</button></div>`).join('')||'<div class="muted">Nessun esercizio in questo giorno.</div>'}</div>`).join('')}
 function addBuilderDay(){builderDays.push({name:`Giorno ${builderDays.length+1}`,exercises:[]});builderDay=builderDays.length-1;renderBuilder()}
 function removeBuilderDay(i){if(builderDays.length===1)return toast('Serve almeno un giorno');builderDays.splice(i,1);builderDay=Math.max(0,Math.min(builderDay,builderDays.length-1));renderBuilder()}
@@ -79,8 +114,8 @@ function openExercisePicker(){$('exerciseModal').classList.remove('hidden');$('p
 function closeExercisePicker(){$('exerciseModal').classList.add('hidden')}
 function debouncedPicker(){clearTimeout(pickerTimer);pickerTimer=setTimeout(loadPicker,350)}
 async function loadPicker(){const q=encodeURIComponent($('pickerSearch').value||'');$('pickerGrid').innerHTML='<div class="muted">Caricamento...</div>';try{const d=await api('/api/exercises?q='+q+'&limit=24');const arr=Array.isArray(d)?d:(d.data||[]);if(!arr.length){$('pickerGrid').innerHTML=empty('Nessun esercizio','Prova un’altra ricerca.');return}$('pickerGrid').innerHTML='';arr.forEach(e=>{const b=document.createElement('button');b.className='picker-item';b.innerHTML='<b>'+esc(e.name||'Esercizio')+'</b><small>'+esc((e.targetMuscles||[]).join(', '))+'</small>';b.onclick=()=>addExerciseFromPicker(e);$('pickerGrid').appendChild(b)})}catch(e){$('pickerGrid').innerHTML=empty('Libreria non disponibile',e.message)}}
-function addExerciseFromPicker(e){builderDays[builderDay].exercises.push({name:e.name,exerciseId:e.exerciseId||e.id,sets:3,reps:'8-12',rest:120,rir:1,equipment:(e.equipments||[]).join(', '),imageUrl:e.imageUrl,gifUrl:e.gifUrl,videoUrl:e.videoUrl});closeExercisePicker();renderBuilder();toast('Esercizio aggiunto')}
-async function loadExercises(){const q=encodeURIComponent($('exerciseSearch').value||''),bp=encodeURIComponent($('bodyFilter').value||''),eq=encodeURIComponent($('equipmentFilter').value||'');$('exerciseGrid').innerHTML='<div class="panel">Caricamento esercizi...</div>';try{const d=await api('/api/exercises?q='+q+'&bodyPart='+bp+'&equipment='+eq+'&limit=36');const arr=Array.isArray(d)?d:(d.data||[]);$('exerciseGrid').innerHTML='';if(!arr.length)$('exerciseGrid').innerHTML=empty('Nessun esercizio','Prova un filtro diverso.');arr.forEach(e=>{const article=document.createElement('article');article.className='exercise';const media=e.imageUrl||e.gifUrl?'<img loading="lazy" src="'+esc(e.imageUrl||e.gifUrl)+'">':'<span>IRONTRACK</span>';article.innerHTML='<div class="exercise-media">'+media+'</div><div><b>'+esc(e.name||'Esercizio')+'</b><small>'+esc((e.targetMuscles||[]).join(', ')||e.target||'')+'</small><small>'+esc((e.equipments||[]).join(', ')||e.equipment||'')+'</small></div>';article.onclick=()=>openExerciseDetail(e);$('exerciseGrid').appendChild(article)});loadExerciseFilters()}catch(e){$('exerciseGrid').innerHTML=empty('ExerciseDB non disponibile',e.message)}}
+function addExerciseFromPicker(e){builderDays[builderDay].exercises.push({name:e.name,exerciseId:e.exerciseId||e.id,sets:3,reps:'8-12',rest:120,rir:1,equipment:(e.equipments||[]).join(', '),imageUrl:e.imageUrl,gifUrl:e.gifUrl,videoUrl:e.videoUrl});closeExercisePicker();renderBuilder();scheduleIconRefresh();toast('Esercizio aggiunto')}
+async function loadExercises(){const q=encodeURIComponent($('exerciseSearch').value||''),bp=encodeURIComponent($('bodyFilter').value||''),eq=encodeURIComponent($('equipmentFilter').value||'');$('exerciseGrid').innerHTML='<div class="panel">Caricamento esercizi...</div>';try{const d=await api('/api/exercises?q='+q+'&bodyPart='+bp+'&equipment='+eq+'&limit=36');const arr=Array.isArray(d)?d:(d.data||[]);$('exerciseGrid').innerHTML='';if(!arr.length)$('exerciseGrid').innerHTML=empty('Nessun esercizio','Prova un filtro diverso.');arr.forEach(e=>{const article=document.createElement('article');article.className='exercise';const media=e.imageUrl||e.gifUrl?'<img loading="lazy" src="'+esc(e.imageUrl||e.gifUrl)+'">':'<span>IRONTRACK</span>';article.innerHTML='<div class="exercise-media">'+media+'</div><div><b>'+esc(e.name||'Esercizio')+'</b><small>'+esc((e.targetMuscles||[]).join(', ')||e.target||'')+'</small><small>'+esc((e.equipments||[]).join(', ')||e.equipment||'')+'</small></div>';article.onclick=()=>openExerciseDetail(e);$('exerciseGrid').appendChild(article)});loadExerciseFilters();scheduleIconRefresh()}catch(e){$('exerciseGrid').innerHTML=empty('ExerciseDB non disponibile',e.message)}}
 async function loadExerciseFilters(){if($('bodyFilter').dataset.loaded)return;try{const [b,e]=await Promise.all([api('/api/exercises-meta/bodyparts'),api('/api/exercises-meta/equipment')]);const ba=b.data||b||[],ea=e.data||e||[];$('bodyFilter').innerHTML='<option value="">Tutti i distretti</option>'+ba.map(x=>`<option value="${esc(x.name||x)}">${esc(x.name||x)}</option>`).join('');$('equipmentFilter').innerHTML='<option value="">Tutta l’attrezzatura</option>'+ea.map(x=>`<option value="${esc(x.name||x)}">${esc(x.name||x)}</option>`).join('');$('bodyFilter').dataset.loaded='1'}catch{}}
 async function openExerciseDetail(e){lastDetail=e;$('detailTitle').textContent=e.name||'Esercizio';$('detailBody').innerHTML='<div class="detail-loading">Caricamento...</div>';$('exerciseDetail').classList.remove('hidden');try{const d=e.exerciseId||e.id?await api('/api/exercises/'+encodeURIComponent(e.exerciseId||e.id)):e;let html='';if(d.imageUrl||d.gifUrl)html+='<img class="detail-image" src="'+esc(d.imageUrl||d.gifUrl)+'">';html+='<div class="detail-tags">'+(d.targetMuscles||[]).map(x=>'<span>'+esc(x)+'</span>').join('')+(d.equipments||[]).map(x=>'<span>'+esc(x)+'</span>').join('')+'</div><h4>Istruzioni</h4><ol>'+(d.instructions||d.steps||[]).map(x=>'<li>'+esc(x)+'</li>').join('')+'</ol>';if(!(d.instructions||d.steps||[]).length)html+='<p class="muted">Nessuna istruzione fornita dalla sorgente.</p>';if(d.videoUrl)html+='<a class="video-link" href="'+esc(d.videoUrl)+'" target="_blank" rel="noopener">▶ Apri video</a>';html+='<button id="detailAddBtn" class="primary wide">＋ Aggiungi alla scheda</button>'; $('detailBody').innerHTML=html;$('detailAddBtn').onclick=()=>{addExerciseFromPicker(d);closeDetail()}}catch(err){$('detailBody').innerHTML=empty('Dettagli non disponibili',err.message)}}
 function closeDetail(){$('exerciseDetail').classList.add('hidden')}
@@ -161,7 +196,7 @@ async function generateAI(){const body={goal:$('aiGoal').value,days:+$('aiDays')
 async function importAIPlan(p){try{await api('/api/routines',{method:'POST',body:JSON.stringify({name:p.name,description:p.description||'',folder:'AI',days:p.days||[]})});await refresh();toast('Programma AI salvato');openPage('routines')}catch(e){toast(e.message)}}
 async function shareRoutinePrompt(){if(!routines.length)return toast('Crea prima una scheda');const names=routines.map((r,i)=>`${i+1}. ${r.name}`).join('\n');const n=prompt('Numero scheda:\n'+names);const r=routines[+n-1];if(!r)return;try{const x=await api('/api/routines/'+r.id+'/share',{method:'POST'});prompt('Codice da inviare:',x.code)}catch(e){toast(e.message)}}
 async function importRoutine(){const c=$('importCode').value.trim();if(!c)return;try{await api('/api/routines/import/'+encodeURIComponent(c),{method:'POST'});await refresh();toast('Scheda importata')}catch(e){toast(e.message)}}
-async function changePassword(){const current=prompt('Password attuale');if(!current)return;const next=prompt('Nuova password (min 6 caratteri)');if(!next)return;try{await api('/api/auth/change-password',{method:'POST',body:JSON.stringify({current_password:current,new_password:next})});toast('Password aggiornata')}catch(e){toast(e.message)}}
+async function changePassword(){const current=prompt('Password attuale');if(!current)return;const next=prompt('Nuova password (min 8 caratteri)');if(!next)return;try{await api('/api/auth/change-password',{method:'POST',body:JSON.stringify({current_password:current,new_password:next})});toast('Password aggiornata')}catch(e){toast(e.message)}}
 function setTheme(theme){api('/api/me/settings',{method:'PATCH',body:JSON.stringify({theme,accent:me.accent})}).then(()=>{me.theme=theme;applySettings()}).catch(e=>toast(e.message))}
 function saveAccent(accent){api('/api/me/settings',{method:'PATCH',body:JSON.stringify({theme:me.theme,accent})}).then(()=>{me.accent=accent;applySettings()}).catch(e=>toast(e.message))}
 function logout(){localStorage.removeItem('iron_token');token=null;location.reload()}
@@ -172,9 +207,64 @@ async function adminNewRoutine(uid,name){const title=prompt(`Nome scheda per ${n
 async function adminEditRoutine(u,r){editingId=null;builderDays=JSON.parse(JSON.stringify(r.days||[]));builderDay=0;$('builderTitle').textContent=`Modifica · ${u.name}`;$('routineName').value=r.name;$('routineFolder').value=r.folder;$('routineDesc').value=r.description||'';renderBuilder();$('builder').dataset.adminUid=u.id;$('builder').dataset.adminRid=r.id;openPage('builder')}
 const originalSaveRoutine=saveRoutine;window.saveRoutine=async function(){const uid=$('builder').dataset.adminUid,rid=$('builder').dataset.adminRid;if(uid&&rid){try{await api(`/api/admin/users/${uid}/routines/${rid}`,{method:'PUT',body:JSON.stringify({name:$('routineName').value,folder:$('routineFolder').value,description:$('routineDesc').value,days:builderDays})});delete $('builder').dataset.adminUid;delete $('builder').dataset.adminRid;toast('Scheda aggiornata');openPage('admin');loadAdmin()}catch(e){toast(e.message)}return}return originalSaveRoutine()}
 
-$('loginForm').onsubmit=async e=>{e.preventDefault();try{const d=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email:$('email').value,password:$('password').value})});token=d.access_token;localStorage.setItem('iron_token',token);location.reload()}catch(e){toast(e.message)}};
-$('showRegister').onclick=()=>{const name=prompt('Nome');const email=prompt('Email');const password=prompt('Password (min 6)');if(name&&email&&password)api('/api/auth/register',{method:'POST',body:JSON.stringify({name,email,password})}).then(d=>{token=d.access_token;localStorage.setItem('iron_token',token);location.reload()}).catch(e=>toast(e.message))};
-window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;$('installBtn').classList.remove('hidden')});$('installBtn').onclick=async()=>{if(deferredInstall){deferredInstall.prompt();deferredInstall=null}};
+function setAuthPanel(panel){
+  ['loginPanel','registerPanel','resetRequestPanel','resetPasswordPanel'].forEach(id=>$(id)?.classList.toggle('hidden',id!==panel));
+  const title=$('authTitle'),sub=$('authSubtitle');
+  if(panel==='loginPanel'){title.innerHTML='Allenati.<br><span>Misura.</span><br>Progredisci.';sub.textContent="Schede, workout, PR e progressi in un'unica esperienza."}
+  if(panel==='registerPanel'){title.innerHTML='Crea il tuo<br><span>percorso.</span>';sub.textContent='Il tuo spazio personale per allenarti, registrare e migliorare.'}
+  if(panel==='resetRequestPanel'){title.innerHTML='Recupera il tuo<br><span>account.</span>';sub.textContent='Ti aiutiamo a rientrare in IronTrack in modo sicuro.'}
+  if(panel==='resetPasswordPanel'){title.innerHTML='Nuova password.<br><span>Riparti.</span>';sub.textContent='Scegli una password sicura e torna al tuo allenamento.'}
+}
+function togglePassword(id,btn){const input=$(id);if(!input)return;input.type=input.type==='password'?'text':'password';btn.textContent=input.type==='password'?'Mostra':'Nascondi'}
+async function completeAuth(d){token=d.access_token;localStorage.setItem('iron_token',token);location.reload()}
+async function loginWithGoogle(credential){try{const d=await api('/api/auth/google',{method:'POST',body:JSON.stringify({credential})});await completeAuth(d)}catch(e){toast(e.message)}}
+function initGoogleAuth(){
+  const clientId=String(CFG.GOOGLE_CLIENT_ID||'').trim();
+  if(!clientId){$('googleUnavailable')?.classList.remove('hidden');return;}
+  const wait=()=>{
+    if(!window.google?.accounts?.id){setTimeout(wait,250);return}
+    window.google.accounts.id.initialize({client_id:clientId,callback:resp=>loginWithGoogle(resp.credential),auto_select:false,cancel_on_tap_outside:true});
+    const target=$('googleButton');if(target)window.google.accounts.id.renderButton(target,{theme:document.body.classList.contains('light')?'outline':'filled_black',size:'large',shape:'pill',text:'continue_with',width:360});
+  };wait();
+}
+$('loginForm').onsubmit=async e=>{e.preventDefault();const btn=e.submitter;btn?.setAttribute('disabled','disabled');try{const d=await api('/api/auth/login',{method:'POST',body:JSON.stringify({email:$('email').value.trim(),password:$('password').value})});await completeAuth(d)}catch(e){toast(e.message)}finally{btn?.removeAttribute('disabled')}};
+$('registerForm').onsubmit=async e=>{e.preventDefault();if($('registerPassword').value!==$('registerConfirm').value)return toast('Le password non coincidono');const btn=e.submitter;btn?.setAttribute('disabled','disabled');try{const d=await api('/api/auth/register',{method:'POST',body:JSON.stringify({name:$('registerName').value.trim(),email:$('registerEmail').value.trim(),password:$('registerPassword').value})});await completeAuth(d)}catch(e){toast(e.message)}finally{btn?.removeAttribute('disabled')}};
+$('resetRequestForm').onsubmit=async e=>{e.preventDefault();try{const d=await api('/api/auth/request-reset',{method:'POST',body:JSON.stringify({email:$('resetEmail').value.trim()})});toast(d.message||'Controlla la tua email');if(d.debug_token){const link=location.origin+location.pathname+'?reset='+encodeURIComponent(d.debug_token);prompt('Token di sviluppo — in produzione viene inviato via email:',link)}}catch(e){toast(e.message)}};
+$('resetPasswordForm').onsubmit=async e=>{e.preventDefault();if($('resetNewPassword').value!==$('resetConfirm').value)return toast('Le password non coincidono');const tokenParam=new URLSearchParams(location.search).get('reset');if(!tokenParam)return toast('Link di reset non valido');try{const d=await api('/api/auth/reset-password',{method:'POST',body:JSON.stringify({token:tokenParam,new_password:$('resetNewPassword').value})});history.replaceState({},'',location.pathname);toast(d.message||'Password aggiornata');setAuthPanel('loginPanel')}catch(e){toast(e.message)}};
+$('showRegister').onclick=()=>setAuthPanel('registerPanel');$('backToLogin').onclick=()=>setAuthPanel('loginPanel');$('forgotPassword').onclick=()=>{if($('email').value)$('resetEmail').value=$('email').value;setAuthPanel('resetRequestPanel')};$('backFromReset').onclick=()=>setAuthPanel('loginPanel');
+
+function setTheme(theme){api('/api/me/settings',{method:'PATCH',body:JSON.stringify({theme,accent:me.accent})}).then(()=>{me.theme=theme;applySettings();initGoogleAuth()}).catch(e=>toast(e.message))}
+function saveAccent(accent){api('/api/me/settings',{method:'PATCH',body:JSON.stringify({theme:me.theme,accent})}).then(()=>{me.accent=accent;applySettings();initGoogleAuth()}).catch(e=>toast(e.message))}
+function logout(){localStorage.removeItem('iron_token');token=null;location.reload()}
+function addAdminNav(){if(document.querySelector('[data-page="admin"]'))return;const nav=document.querySelector('.bottomnav');const b=document.createElement('button');b.dataset.page='admin';b.onclick=()=>openPage('admin');b.innerHTML='♙<span>Admin</span>';nav.appendChild(b)}
+function isIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent)||(/Macintosh/i.test(navigator.userAgent)&&navigator.maxTouchPoints>1)}
+function isStandalone(){return window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true}
+function updateInstallUI(){
+  const btn=$('installSettingsBtn'),help=$('installHelp'); if(!btn)return;
+  if(isStandalone()){btn.textContent='✓ IronTrack installata';btn.disabled=true;help.textContent='IronTrack è già installata sulla schermata Home.';return;}
+  btn.disabled=false;
+  if(isIOS()){btn.textContent=' Installa su iPhone / iPad';help.textContent='Safari: userai il menu Condividi per aggiungere IronTrack alla schermata Home.';return;}
+  if(deferredInstall){btn.textContent='📲 Installa IronTrack';help.textContent='Android/Chrome: tocca il pulsante e conferma l’installazione.';return;}
+  btn.textContent='📲 Come installare';help.textContent='Apri il menu del browser e scegli “Installa app” o “Aggiungi alla schermata Home”.';
+}
+function openIOSInstallGuide(){
+  const modal=document.createElement('div'); modal.className='modal'; modal.id='iosInstallModal';
+  modal.innerHTML=`<div class="modal-card"><div class="modal-head"><h3>Installa IronTrack su iPhone</h3><button class="ghost" onclick="document.getElementById('iosInstallModal')?.remove()">×</button></div><img src="./assets/apple-touch-icon-180.png" alt="Logo IronTrack" class="install-modal-icon"><h3 class="install-modal-title">Aggiungi IronTrack alla Home</h3><p class="install-modal-subtitle">Su iPhone e iPad l’installazione si fa da Safari.</p><div class="ios-install-steps"><div class="ios-step"><span class="ios-step-num">1</span><div><b>Apri Safari</b><small>Apri IronTrack dal suo indirizzo web usando Safari.</small></div></div><div class="ios-step"><span class="ios-step-num">2</span><div><b>Tocca Condividi <span class="share-symbol">↑</span></b><small>È il pulsante di condivisione nella barra di Safari.</small></div></div><div class="ios-step"><span class="ios-step-num">3</span><div><b>Aggiungi alla schermata Home</b><small>Scorri il menu, seleziona “Aggiungi alla schermata Home” e conferma con “Aggiungi”.</small></div></div></div><button class="secondary wide" onclick="copyInstallLink()">Copia link IronTrack</button></div>`;
+  document.body.appendChild(modal);
+}
+async function copyInstallLink(){try{await navigator.clipboard.writeText(location.href);toast('Link copiato');}catch(e){toast('Copia il link dalla barra del browser')}}
+function downloadApp(){ installApp(); }
+async function installApp(){
+  if(isStandalone()){toast('IronTrack è già installata');return;}
+  if(isIOS()){openIOSInstallGuide();return;}
+  if(deferredInstall){try{await deferredInstall.prompt();await deferredInstall.userChoice}catch(e){}deferredInstall=null;updateInstallUI();return;}
+  toast('Apri il menu del browser e scegli “Installa app” o “Aggiungi alla schermata Home”.');
+}
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;updateInstallUI()});
+window.addEventListener('appinstalled',()=>{deferredInstall=null;updateInstallUI();toast('IronTrack installata')});
+window.addEventListener('pageshow',()=>{updateInstallUI();scheduleIconRefresh()});
+
 if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
 window.addEventListener('beforeunload',()=>{if(sessionStart)saveDraft()});
+scheduleIconRefresh();
 boot();

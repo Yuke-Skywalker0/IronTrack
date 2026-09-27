@@ -1,5 +1,5 @@
 import os,json
-from datetime import datetime,timezone
+from datetime import datetime,timezone,timedelta
 from contextlib import asynccontextmanager
 from typing import Optional
 import httpx
@@ -7,9 +7,15 @@ from dotenv import load_dotenv
 from fastapi import FastAPI,Depends,HTTPException,Header,Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+try:
+    from google.oauth2 import id_token as google_id_token
+    from google.auth.transport import requests as google_requests
+except ImportError:
+    google_id_token=None; google_requests=None
+import secrets
 from pydantic import BaseModel,Field,EmailStr
 from .db import Store
-from .security import hash_password,verify_password,create_token,decode_token
+from .security import hash_password,verify_password,create_token,decode_token,hash_token
 
 load_dotenv(); store=Store()
 
@@ -29,16 +35,19 @@ async def lifespan(app):
         if not os.getenv('MONGODB_URI','').strip():
             raise RuntimeError('MONGODB_URI è obbligatorio in produzione')
     ensure_admin(); yield
-app=FastAPI(title='IronTrack API',version='2.8.0',lifespan=lifespan)
+app=FastAPI(title='IronTrack API',version='2.12.0',lifespan=lifespan)
 origins=[x.strip() for x in os.getenv('FRONTEND_ORIGIN','http://localhost:5500,http://127.0.0.1:5500').split(',') if x.strip()]
 app.add_middleware(CORSMiddleware,allow_origins=origins,allow_origin_regex=r'^https?://(localhost|127\.0\.0\.1)(:\d+)?$' if os.getenv('ENVIRONMENT','development')!='production' else None,allow_credentials=True,allow_methods=['*'],allow_headers=['*'])
 
 class Login(BaseModel): email:EmailStr; password:str
-class Register(BaseModel): email:EmailStr; password:str=Field(min_length=6); name:str=Field(min_length=1,max_length=80)
+class Register(BaseModel): email:EmailStr; password:str=Field(min_length=8); name:str=Field(min_length=1,max_length=80)
 class RoutineIn(BaseModel): name:str; folder:str='Le mie schede'; description:str=''; days:list=Field(default_factory=list)
 class SessionIn(BaseModel): routine_id:Optional[str]=None; routine_name:str='Allenamento'; started_at:Optional[str]=None; duration_min:int=0; notes:str=''; sets:list=Field(default_factory=list)
 class SettingsIn(BaseModel): theme:str='system'; accent:str='#8b5cf6'
-class PasswordIn(BaseModel): current_password:str; new_password:str=Field(min_length=6)
+class PasswordIn(BaseModel): current_password:str; new_password:str=Field(min_length=8)
+class ResetRequest(BaseModel): email:EmailStr
+class ResetPasswordIn(BaseModel): token:str=Field(min_length=20); new_password:str=Field(min_length=8)
+class GoogleLogin(BaseModel): credential:str=Field(min_length=20)
 class ChildIn(BaseModel): email:EmailStr; password:str=Field(min_length=6); name:str
 class ProfileIn(BaseModel): name:str=Field(min_length=1,max_length=80); height_cm:Optional[float]=None; weight_kg:Optional[float]=None; notes:str=''
 class MeasurementIn(BaseModel): recorded_at:Optional[str]=None; weight_kg:Optional[float]=None; height_cm:Optional[float]=None; body_fat:Optional[float]=None; waist_cm:Optional[float]=None; chest_cm:Optional[float]=None; arm_cm:Optional[float]=None; thigh_cm:Optional[float]=None; notes:str=''
@@ -69,7 +78,7 @@ def health():
         try: store.db.command('ping')
         except Exception: db_ok=False
     if not db_ok: raise HTTPException(503,'Database non raggiungibile')
-    return {'ok':True,'service':'irontrack-api','version':'2.8.0','time':datetime.now(timezone.utc).isoformat(),'database':'mongodb' if store.mongo else 'sqlite','database_ok':db_ok}
+    return {'ok':True,'service':'irontrack-api','version':'2.12.0','time':datetime.now(timezone.utc).isoformat(),'database':'mongodb' if store.mongo else 'sqlite','database_ok':db_ok}
 @app.post('/api/auth/login')
 def login(body:Login):
     u=store.user_by_email(body.email)
@@ -79,6 +88,60 @@ def login(body:Login):
 def register(body:Register):
     if store.user_by_email(body.email):raise HTTPException(409,'Email già registrata')
     u=store.create_user(body.email,hash_password(body.password),body.name);return {'access_token':create_token(u['id'],u['email'],u['role']),'user':safe_user(u)}
+
+@app.post('/api/auth/google')
+def google_login(body:GoogleLogin):
+    client_id=os.getenv('GOOGLE_CLIENT_ID','').strip()
+    if not client_id: raise HTTPException(503,'Login Google non configurato. Imposta GOOGLE_CLIENT_ID su backend e client ID nel frontend.')
+    if google_id_token is None or google_requests is None: raise HTTPException(503,'Google Auth non disponibile sul server')
+    try:
+        info=google_id_token.verify_oauth2_token(body.credential, google_requests.Request(), client_id)
+        email=(info.get('email') or '').lower().strip(); name=(info.get('name') or email.split('@')[0]).strip()
+        if not email or not info.get('email_verified'): raise ValueError('Email Google non verificata')
+    except Exception:
+        raise HTTPException(401,'Credenziali Google non valide')
+    u=store.upsert_google_user(email,name)
+    return {'access_token':create_token(u['id'],u['email'],u['role']),'user':safe_user(u)}
+
+def esc_html(value):
+    return str(value).replace('&','&amp;').replace('<','&lt;').replace('>','&gt;').replace('\"','&quot;')
+
+@app.post('/api/auth/request-reset')
+async def request_reset(body:ResetRequest):
+    # Always return the same public message to avoid leaking account existence.
+    u=store.user_by_email(body.email)
+    response={'ok':True,'message':"Se l'account esiste, riceverai un link per reimpostare la password."}
+    if not u: return response
+    raw=secrets.token_urlsafe(48); store.invalidate_auth_tokens(u['id'],'password_reset')
+    expires=(datetime.now(timezone.utc)+timedelta(minutes=30)).isoformat(); store.create_auth_token(u['id'],hash_token(raw),'password_reset',expires)
+    base=os.getenv('PUBLIC_BASE_URL','').strip().rstrip('/')
+    if not base: base='http://localhost:8001'
+    link=f'{base}/?reset={raw}'
+    resend_key=os.getenv('RESEND_API_KEY','').strip(); sender=os.getenv('EMAIL_FROM','').strip()
+    if resend_key and sender:
+        try:
+            async with httpx.AsyncClient(timeout=15) as client:
+                r=await client.post('https://api.resend.com/emails',headers={'Authorization':f'Bearer {resend_key}','Content-Type':'application/json'},json={'from':sender,'to':[u['email']],'subject':'Reimposta la password di IronTrack','html':f'<p>Ciao {esc_html(u.get("name") or "")}!</p><p>Hai richiesto di reimpostare la password di IronTrack.</p><p><a href="{link}">Reimposta la password</a></p><p>Il link scade tra 30 minuti.</p>'}); r.raise_for_status()
+        except Exception:
+            # Do not reveal mail provider errors to callers.
+            pass
+    elif os.getenv('ENVIRONMENT','development')!='production':
+        response['debug_token']=raw
+    return response
+
+@app.post('/api/auth/reset-password')
+def reset_password(body:ResetPasswordIn):
+    row=store.get_auth_token(hash_token(body.token),'password_reset')
+    if not row or row.get('used_at'): raise HTTPException(400,'Link non valido o già utilizzato')
+    try: expired=datetime.fromisoformat(row['expires_at']) <= datetime.now(timezone.utc)
+    except Exception: expired=True
+    if expired: raise HTTPException(400,'Link scaduto')
+    consumed=store.consume_auth_token(hash_token(body.token),'password_reset')
+    if not consumed: raise HTTPException(400,'Link non valido o già utilizzato')
+    u=store.user_by_id(consumed['user_id'])
+    if not u: raise HTTPException(400,'Account non trovato')
+    store.update_password(u['id'],hash_password(body.new_password))
+    return {'ok':True,'message':'Password aggiornata. Ora puoi accedere.'}
 @app.get('/api/me')
 def me(user=Depends(current_user)):return safe_user(user)
 @app.patch('/api/me/profile')

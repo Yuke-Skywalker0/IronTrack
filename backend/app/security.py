@@ -28,3 +28,7 @@ def create_token(user_id: str, email: str, role: str):
 def decode_token(token: str):
     secret = os.getenv("JWT_SECRET", "dev-secret-change-me")
     return jwt.decode(token, secret, algorithms=[ALGORITHM])
+
+
+def hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()

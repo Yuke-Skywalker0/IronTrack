@@ -1,4 +1,4 @@
-# IronTrack 2.4 — Personal Gym OS
+# IronTrack 2.12 — Personal Gym OS
 
 App PWA mobile-first per allenamento personale, amici e profili gestiti dal Super Admin.
 
@@ -99,3 +99,27 @@ irontrack/
 ├─ run_frontend.py
 └─ start_local.bat
 ```
+
+
+## Autenticazione Google Cloud + recupero password
+
+IronTrack supporta il login con **Google Identity Services**. Il `GOOGLE_CLIENT_ID` è un identificativo pubblico del client web e va configurato sia nel frontend (`frontend/config.js`) sia come variabile `GOOGLE_CLIENT_ID` su Render. Il backend verifica il credential Google prima di creare la propria sessione JWT.
+
+### Google Cloud
+1. Google Cloud Console → crea/seleziona il progetto IronTrack.
+2. Configura la schermata di consenso OAuth.
+3. Crea un OAuth Client ID di tipo **Web application**.
+4. Aggiungi come origine autorizzata il dominio pubblico di IronTrack, per esempio `https://irontrack-xxxx.onrender.com`.
+5. Copia il Client ID in `frontend/config.js` come `GOOGLE_CLIENT_ID`.
+6. Inserisci lo stesso valore nella variabile `GOOGLE_CLIENT_ID` di Render.
+
+### Recupero password
+Il reset password nativo IronTrack usa token monouso hashati, scadenza di 30 minuti e invalidazione dopo l'uso. In produzione, per inviare il link, configura **Resend** con `RESEND_API_KEY`, `EMAIL_FROM` e `PUBLIC_BASE_URL`. In sviluppo il token può essere restituito solo come `debug_token`; questa modalità non viene esposta in produzione.
+
+> Google Cloud non deve contenere segreti nel frontend. Il Client ID è pubblico; JWT secret, MongoDB URI, Resend API key e password admin restano esclusivamente nelle variabili segrete di Render.
+
+
+## UI stack 2.12
+- Lucide Icons 0.556.0 for consistent SVG icons.
+- Inter for body text and Manrope for display/headings.
+- Theme-aware icon styling with graceful fallback if the CDN is unavailable.

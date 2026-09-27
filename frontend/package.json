@@ -1,0 +1,14 @@
+{
+  "name": "irontrack-frontend-ui",
+  "private": true,
+  "version": "2.12.0",
+  "description": "IronTrack UI dependency manifest",
+  "dependencies": {
+    "lucide": "0.556.0"
+  },
+  "fonts": {
+    "body": "Inter",
+    "display": "Manrope"
+  },
+  "notes": "Static PWA currently loads Lucide UMD and Google Fonts via CDN; package metadata is kept for future bundling."
+}

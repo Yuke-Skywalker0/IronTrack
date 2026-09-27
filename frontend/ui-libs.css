@@ -1,0 +1,37 @@
+/* IronTrack typography + icon package layer */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Manrope:wght@500;600;700;800&display=swap");
+
+:root {
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-display: "Manrope", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  font-family: var(--font-body);
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, .brand b, .auth-brand b, .card-title, .page-head h2, .auth-copy h1 {
+  font-family: var(--font-display);
+}
+
+.lucide {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2.25;
+  flex: 0 0 auto;
+}
+
+button .lucide { pointer-events: none; }
+.iconbtn .lucide { width: 19px; height: 19px; }
+.bottomnav .lucide { width: 19px; height: 19px; margin-bottom: 2px; }
+.theme-option .lucide { width: 21px; height: 21px; }
+.settings-icon .lucide { width: 20px; height: 20px; }
+
+[data-icon-ready="1"] { gap: 8px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
