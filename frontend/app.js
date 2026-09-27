@@ -23,35 +23,55 @@ async function api(path,opt={}){
   }finally{clearTimeout(timer)}
 }
 const ICON_MAP=[
-  [/^\s*\+?\s*Nuova/i,'plus'],[/^\s*Allenati/i,'dumbbell'],[/^\s*Modifica/i,'pencil'],[/^\s*Copia/i,'copy'],[/^\s*Vedi tutte/i,'list'],[/^\s*Salva scheda/i,'save'],[/^\s*\+?\s*Giorno/i,'calendar-plus'],[/^\s*\+?\s*Esercizio/i,'dumbbell'],[/^\s*Chiudi/i,'x'],[/^\s*Recupero/i,'timer'],[/^\s*Esci/i,'log-out'],[/^\s*Termina e salva/i,'check-circle-2'],[/^\s*Analisi/i,'chart-no-axes-combined'],[/^\s*\+?\s*Aggiungi/i,'plus'],[/^\s*Genera programma/i,'sparkles'],[/^\s*Salva profilo/i,'save'],[/^\s*Cambia password/i,'key-round'],[/^\s*Esci/i,'log-out'],[/^\s*Installa IronTrack/i,'download'],[/^\s*Come installare/i,'download'],[/^\s*Guida iPhone/i,'smartphone'],[/^\s*Copia link/i,'link'],[/^\s*Genera codice scheda/i,'share-2'],[/^\s*Importa scheda/i,'upload'],[/^\s*SUPER ADMIN/i,'shield-check'],[/^\s*Apri profilo/i,'user-round'],[/^\s*Salva/i,'save'],[/^\s*Continua/i,'arrow-right'],[/^\s*Accedi/i,'log-in'],[/^\s*Crea account/i,'user-plus'],[/^\s*Invia link/i,'mail'],[/^\s*Salva nuova password/i,'key-round']
+  [/^\s*\+?\s*Nuova/i,'plus'],[/^\s*Allenati/i,'dumbbell'],[/^\s*Modifica/i,'pencil'],[/^\s*Copia/i,'copy'],[/^\s*Vedi tutte/i,'list'],[/^\s*Salva scheda/i,'save'],[/^\s*\+?\s*Giorno/i,'calendar-plus'],[/^\s*\+?\s*Esercizio/i,'dumbbell'],[/^\s*Chiudi/i,'x'],[/^\s*Recupero/i,'timer'],[/^\s*Esci/i,'log-out'],[/^\s*Termina e salva/i,'check-circle-2'],[/^\s*Analisi/i,'chart-no-axes-combined'],[/^\s*\+?\s*Aggiungi/i,'plus'],[/^\s*Genera programma/i,'sparkles'],[/^\s*Salva profilo/i,'save'],[/^\s*Cambia password/i,'key-round'],[/^\s*Installa IronTrack/i,'download'],[/^\s*Come installare/i,'download'],[/^\s*Guida iPhone/i,'smartphone'],[/^\s*Copia link/i,'link'],[/^\s*Genera codice scheda/i,'share-2'],[/^\s*Importa scheda/i,'upload'],[/^\s*SUPER ADMIN/i,'shield-check'],[/^\s*Apri profilo/i,'user-round'],[/^\s*Salva/i,'save'],[/^\s*Continua/i,'arrow-right'],[/^\s*Accedi/i,'log-in'],[/^\s*Crea account/i,'user-plus'],[/^\s*Invia link/i,'mail'],[/^\s*Salva nuova password/i,'key-round']
 ];
+const DECORATIVE_PREFIX=/^(?:\s*[+＋×✕✖✓✔←→↗⌂▤◉◷✦⚙☀☾◐♙●📲🔒⚡✉🔐🗑️⭐❤️🔥🏋️‍♂️🏋️‍♀️🏋️‍?\u{1F300}-\u{1FAFF}]\s*)+/u;
 function iconNameFor(text){
   const t=String(text||'').replace(/\s+/g,' ').trim();
   for(const [re,name] of ICON_MAP) if(re.test(t)) return name;
   return null;
 }
+function stripDecorativePrefix(btn){
+  const walker=document.createTreeWalker(btn,NodeFilter.SHOW_TEXT);
+  const first=walker.nextNode();
+  if(!first) return;
+  const cleaned=first.nodeValue.replace(DECORATIVE_PREFIX,'');
+  if(cleaned!==first.nodeValue) first.nodeValue=cleaned;
+}
+function addIcon(btn,name){
+  if(!btn||!name||btn.querySelector('[data-lucide],svg')) return;
+  stripDecorativePrefix(btn);
+  const i=document.createElement('i');
+  i.setAttribute('data-lucide',name);
+  i.setAttribute('aria-hidden','true');
+  i.className='icon-inline';
+  btn.prepend(i);
+  btn.dataset.iconReady='1';
+}
 function refreshIcons(){
   if(!window.lucide?.createIcons) return;
   document.querySelectorAll('button:not([data-icon-ready="1"])').forEach(btn=>{
-    if(btn.querySelector('svg,.lucide')) return;
-    const text=btn.textContent.replace(/[\u{1F300}-\u{1FAFF}]/gu,'').replace(/[✓×＋←→↗⌂▤◉◷✦⚙☀☾◐]/g,'').trim();
+    if(btn.querySelector('[data-lucide],svg')) return;
+    const text=btn.textContent.replace(/\s+/g,' ').trim();
     const name=iconNameFor(text);
-    if(!name) return;
-    const i=document.createElement('i'); i.setAttribute('data-lucide',name); i.setAttribute('aria-hidden','true');
-    btn.prepend(i); btn.dataset.iconReady='1';
+    if(name) addIcon(btn,name);
   });
   document.querySelectorAll('.bottomnav button').forEach(btn=>{
-    if(btn.querySelector('svg')) return;
+    if(btn.querySelector('[data-lucide],svg')) return;
     const map={dashboard:'house',routines:'notebook-tabs',exercises:'dumbbell',history:'history',ai:'sparkles',profile:'settings',admin:'shield-check'};
-    const name=map[btn.dataset.page]; if(!name) return;
-    const i=document.createElement('i');i.setAttribute('data-lucide',name);i.setAttribute('aria-hidden','true');btn.prepend(i);
+    addIcon(btn,map[btn.dataset.page]);
   });
   const themes={themeSystem:'monitor-smartphone',themeLight:'sun',themeDark:'moon'};
-  Object.entries(themes).forEach(([id,name])=>{const el=$(id);if(!el||el.querySelector('svg'))return;el.querySelector('span')?.remove();const i=document.createElement('i');i.setAttribute('data-lucide',name);i.setAttribute('aria-hidden','true');el.prepend(i);});
-  const si=document.querySelector('.settings-icon'); if(si&&!si.querySelector('svg')){si.textContent='';const i=document.createElement('i');i.setAttribute('data-lucide','palette');i.setAttribute('aria-hidden','true');si.appendChild(i);}
-  window.lucide.createIcons({attrs:{'stroke-width':2.25}});
+  Object.entries(themes).forEach(([id,name])=>{
+    const el=$(id); if(!el||el.querySelector('[data-lucide],svg')) return;
+    el.querySelector('span')?.remove(); addIcon(el,name);
+  });
+  const si=document.querySelector('.settings-icon');
+  if(si&&!si.querySelector('[data-lucide],svg')){si.textContent='';addIcon(si,'palette');}
+  window.lucide.createIcons({attrs:{'stroke-width':2.1}});
 }
 function scheduleIconRefresh(){requestAnimationFrame(()=>setTimeout(refreshIcons,0));}
+
 
 function toast(t){$('toast').textContent=t;$('toast').classList.add('show');clearTimeout(window.__toast);window.__toast=setTimeout(()=>$('toast').classList.remove('show'),2600)}
 function empty(a,b){return `<div class="empty"><b>${esc(a)}</b><span>${esc(b)}</span></div>`}
@@ -200,7 +220,18 @@ async function changePassword(){const current=prompt('Password attuale');if(!cur
 function setTheme(theme){api('/api/me/settings',{method:'PATCH',body:JSON.stringify({theme,accent:me.accent})}).then(()=>{me.theme=theme;applySettings()}).catch(e=>toast(e.message))}
 function saveAccent(accent){api('/api/me/settings',{method:'PATCH',body:JSON.stringify({theme:me.theme,accent})}).then(()=>{me.accent=accent;applySettings()}).catch(e=>toast(e.message))}
 function logout(){localStorage.removeItem('iron_token');token=null;location.reload()}
-function addAdminNav(){if(document.querySelector('[data-page="admin"]'))return;const nav=document.querySelector('.bottomnav');const b=document.createElement('button');b.dataset.page='admin';b.onclick=()=>openPage('admin');b.innerHTML='♙<span>Admin</span>';nav.appendChild(b)}
+function addAdminNav(){
+  if(document.querySelector('[data-page="admin"]')) return;
+  const nav=document.querySelector('.bottomnav');
+  if(!nav) return;
+  const b=document.createElement('button');
+  b.dataset.page='admin';
+  b.onclick=()=>openPage('admin');
+  b.innerHTML='<span>Superadmin</span>';
+  b.setAttribute('aria-label','Apri Superadmin');
+  nav.appendChild(b);
+  scheduleIconRefresh();
+}
 async function loadAdmin(){try{const users=await api('/api/admin/users');$('adminUsers').innerHTML=users.map(u=>`<div class="card"><div class="card-title">${esc(u.name)}</div><div class="card-meta">${esc(u.email)} · ${u.role}</div>${u.weight_kg?`<div class="chips"><span>${u.weight_kg} kg</span>${u.height_cm?`<span>${u.height_cm} cm</span>`:''}</div>`:''}<div class="card-actions">${u.role!=='admin'?`<button class="secondary small" onclick="showChild('${u.id}','${esc(u.name)}')">Apri profilo</button>`:'<span class="chip">SUPER ADMIN</span>'}</div></div>`).join('')}catch(e){$('adminUsers').innerHTML=empty('Admin non disponibile',e.message)}}
 async function showChild(uid,name){try{const [u,rs,ss]=await Promise.all([api('/api/admin/users/'+uid),api('/api/admin/users/'+uid+'/routines'),api('/api/admin/users/'+uid+'/sessions')]);$('adminChildRoutines').classList.remove('hidden');$('adminChildRoutines').innerHTML=`<div class="section-head"><div><h3>${esc(u.name)}</h3><small>${esc(u.email)} · ${ss.length} allenamenti</small></div><button class="primary small" onclick="adminNewRoutine('${uid}','${esc(name)}')">＋ Scheda</button></div>${rs.map(r=>`<div class="list-row"><div><b>${esc(r.name)}</b><small>${esc(r.folder)} · ${(r.days||[]).length} giorni</small></div><button class="secondary small" onclick='adminEditRoutine(${JSON.stringify(u).replace(/'/g,'&#39;')},${JSON.stringify(r).replace(/'/g,'&#39;')})'>Modifica</button></div>`).join('')||empty('Nessuna scheda','Crea una scheda per questo profilo.')}`}catch(e){toast(e.message)}}
 async function adminNewRoutine(uid,name){const title=prompt(`Nome scheda per ${name}`);if(!title)return;const days=[{name:'Giorno 1',exercises:[{name:'Panca piana',sets:3,reps:'8-10',rir:1},{name:'Lat machine',sets:3,reps:'8-12',rir:1},{name:'Alzate laterali',sets:3,reps:'12-15',rir:1}]}];try{await api('/api/admin/users/'+uid+'/routines',{method:'POST',body:JSON.stringify({name:title,folder:'Assegnate dal coach',description:'Scheda creata dal Super Admin',days})});toast('Scheda assegnata');showChild(uid,name)}catch(e){toast(e.message)}}
@@ -236,7 +267,6 @@ $('showRegister').onclick=()=>setAuthPanel('registerPanel');$('backToLogin').onc
 function setTheme(theme){api('/api/me/settings',{method:'PATCH',body:JSON.stringify({theme,accent:me.accent})}).then(()=>{me.theme=theme;applySettings();initGoogleAuth()}).catch(e=>toast(e.message))}
 function saveAccent(accent){api('/api/me/settings',{method:'PATCH',body:JSON.stringify({theme:me.theme,accent})}).then(()=>{me.accent=accent;applySettings();initGoogleAuth()}).catch(e=>toast(e.message))}
 function logout(){localStorage.removeItem('iron_token');token=null;location.reload()}
-function addAdminNav(){if(document.querySelector('[data-page="admin"]'))return;const nav=document.querySelector('.bottomnav');const b=document.createElement('button');b.dataset.page='admin';b.onclick=()=>openPage('admin');b.innerHTML='♙<span>Admin</span>';nav.appendChild(b)}
 function isIOS(){return /iphone|ipad|ipod/i.test(navigator.userAgent)||(/Macintosh/i.test(navigator.userAgent)&&navigator.maxTouchPoints>1)}
 function isStandalone(){return window.matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true}
 function updateInstallUI(){
