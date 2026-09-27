@@ -1,0 +1,23 @@
+{
+  "name": "IronTrack \u2014 Gym Tracker",
+  "short_name": "IronTrack",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0b0d12",
+  "theme_color": "#8b5cf6",
+  "description": "Workout tracker personale con schede, esercizi e AI.",
+  "icons": [
+    {
+      "src": "./assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./assets/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
