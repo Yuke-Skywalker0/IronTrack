@@ -123,3 +123,45 @@ Il reset password nativo IronTrack usa token monouso hashati, scadenza di 30 min
 - Lucide Icons 0.556.0 for consistent SVG icons.
 - Inter for body text and Manrope for display/headings.
 - Theme-aware icon styling with graceful fallback if the CDN is unavailable.
+
+## v2.15.0 — Exercise Hub
+
+- Exercise Hub with **Tutti / Preferiti / Recenti / I miei**.
+- Favorites, recent exercises and custom exercises are stored locally in the browser.
+- Rich exercise detail view with target muscles, secondary muscles, equipment, instructions, tips and variations when available.
+- Local curated catalog: **649 additional exercise variants** generated and editorially structured by IronTrack, used to enrich the external ExerciseDB catalog and provide fallback content.
+- The current ExerciseDB free V1 source advertises 1,500 exercises; the current ExerciseDB project/repository advertises a broader 11,000+ structured catalog. IronTrack keeps the free source as default and does not hard-code undocumented premium endpoints.
+- Add your variables in `backend/.env` using `backend/.env.example` as the template.
+
+### Local setup
+
+```bash
+cd backend
+copy .env.example .env
+```
+
+On macOS/Linux:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Then set a real `JWT_SECRET` and admin password before production use.
+
+
+## v2.15 — Progression Intelligence
+- Workout overview for 7/30 days
+- Training volume and consistency metrics
+- Training streak
+- Estimated 1RM (Epley) per exercise
+- RIR overview
+- Actionable training insights
+- Responsive Progression dashboard
+
+## v2.16 — Training Engine
+
+- Next-session recommendation engine based on recent performance.
+- Double-progression guidance with transparent increase / maintain / reduce / start actions.
+- Uses recent reps and recorded RIR; no opaque load changes.
+- New `GET /api/training-engine` endpoint.
+- Progression dashboard now includes a dedicated "Prossimo allenamento" panel.

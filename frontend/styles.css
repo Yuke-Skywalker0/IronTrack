@@ -132,3 +132,60 @@ button[data-icon-ready="1"] .icon-inline{pointer-events:none}
 @media(max-width:760px){.exercise-filters{grid-template-columns:1fr 1fr}.exercise-filters input{grid-column:1/-1}.library-toolbar{margin-top:12px}.library-toolbar button{min-height:40px}.bottomnav button span{font-size:7.5px}.bottomnav button .icon-inline,.bottomnav button svg{width:17px;height:17px}}
 @media(max-width:420px){.exercise-filters{grid-template-columns:1fr}.exercise-filters input{grid-column:auto}.bottomnav{padding-left:3px;padding-right:3px}.bottomnav button{padding-left:1px;padding-right:1px}.bottomnav button span{font-size:6.7px}.bottomnav button .icon-inline,.bottomnav button svg{width:16px;height:16px}.bottomnav button{min-height:52px}}
 .icon-only{width:42px;min-width:42px;padding:0;display:inline-grid;place-items:center}.icon-only .icon-inline,.icon-only svg{margin:0}
+
+/* ===== Exercise Hub / UX polish v2.14.1 ===== */
+.library-subtitle{max-width:620px;margin:7px 0 0;line-height:1.45;font-size:12px}
+.exercise-hub-tabs{display:flex;gap:7px;overflow:auto;padding:3px 1px 10px;margin-bottom:4px;scrollbar-width:none}
+.exercise-hub-tabs::-webkit-scrollbar{display:none}
+.hub-tab{flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:10px 13px;color:var(--muted);font-weight:850;font-size:12px}
+.hub-tab.active{background:color-mix(in srgb,var(--accent) 14%,var(--surface));border-color:color-mix(in srgb,var(--accent) 45%,var(--line));color:var(--text)}
+.hub-tab svg{width:15px;height:15px}
+.exercise-card-rich{position:relative;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+.exercise-card-rich:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 45%,var(--line));box-shadow:0 12px 30px #0004}
+.exercise-card-rich .exercise-media{position:relative;background:linear-gradient(145deg,var(--surface2),color-mix(in srgb,var(--accent) 7%,var(--surface2)))}
+.exercise-fav{position:absolute;right:9px;top:9px;width:36px;height:36px;border-radius:12px;background:#0a0c10cc;border:1px solid #ffffff1c;display:grid;place-items:center;z-index:2}
+.exercise-fav svg{width:17px;height:17px}
+.exercise-fav.active{color:#ff5c72}
+.exercise-source{display:inline-flex;align-items:center;gap:5px;margin-top:8px;font-size:9px;font-weight:850;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.exercise-source.local{color:var(--accent)}
+.exercise-card-footer button{background:transparent;color:var(--accent);font-size:10px;font-weight:900}
+.custom-exercise-card{max-width:650px}
+.custom-card-badge{font-size:9px!important;color:var(--accent)!important;font-weight:900!important;text-transform:uppercase;letter-spacing:.08em}
+.skeleton-card{overflow:hidden}.skeleton-line{height:10px;border-radius:8px;background:linear-gradient(90deg,var(--surface2),color-mix(in srgb,var(--text) 8%,var(--surface2)),var(--surface2));background-size:200% 100%;animation:skeleton 1.1s infinite}.skeleton-media{aspect-ratio:16/10}.skeleton-lines{padding:14px;display:grid;gap:8px}.skeleton-lines .short{width:58%}@keyframes skeleton{to{background-position:-200% 0}}
+@media(max-width:650px){.page-head h2{font-size:28px}.exercise-hub-tabs{margin-right:-2px}.hub-tab{padding:9px 11px}.exercise-grid{grid-template-columns:1fr 1fr}.exercise-card-rich .exercise-content{padding:11px}.exercise-card-rich p{font-size:10px}.exercise-card-footer{font-size:9px}.exercise-fav{width:32px;height:32px}}
+@media(max-width:420px){.exercise-grid{grid-template-columns:1fr}.exercise-hub-tabs{gap:5px}.hub-tab{font-size:11px;padding:8px 10px}.library-subtitle{font-size:11px}}
+
+/* ===== Exercise Hub / UX polish v2.14.1 ===== */
+.library-subtitle{max-width:620px;margin:7px 0 0;line-height:1.45;font-size:12px}
+.exercise-hub-tabs{display:flex;gap:7px;overflow:auto;padding:3px 1px 10px;margin-bottom:4px;scrollbar-width:none}.exercise-hub-tabs::-webkit-scrollbar{display:none}
+.hub-tab{flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:10px 13px;color:var(--muted);font-weight:850;font-size:12px}.hub-tab.active{background:color-mix(in srgb,var(--accent) 14%,var(--surface));border-color:color-mix(in srgb,var(--accent) 45%,var(--line));color:var(--text)}.hub-tab svg{width:15px;height:15px}
+.exercise-card-rich{position:relative;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}.exercise-card-rich:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--accent) 45%,var(--line));box-shadow:0 12px 30px #0004}.exercise-card-rich .exercise-media{position:relative;background:linear-gradient(145deg,var(--surface2),color-mix(in srgb,var(--accent) 7%,var(--surface2)))}
+.exercise-fav{position:absolute;right:9px;top:9px;width:36px;height:36px;border-radius:12px;background:#0a0c10cc;border:1px solid #ffffff1c;display:grid;place-items:center;z-index:2}.exercise-fav svg{width:17px;height:17px}.exercise-fav.active{color:#ff5c72}
+.exercise-source{display:inline-flex;align-items:center;gap:5px;margin-top:8px;font-size:9px;font-weight:850;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}.exercise-source.local{color:var(--accent)}
+.custom-exercise-card{max-width:650px}.custom-card-badge{font-size:9px!important;color:var(--accent)!important;font-weight:900!important;text-transform:uppercase;letter-spacing:.08em}
+.skeleton-card{overflow:hidden}.skeleton-line{height:10px;border-radius:8px;background:linear-gradient(90deg,var(--surface2),color-mix(in srgb,var(--text) 8%,var(--surface2)),var(--surface2));background-size:200% 100%;animation:skeleton 1.1s infinite}.skeleton-media{aspect-ratio:16/10}.skeleton-lines{padding:14px;display:grid;gap:8px}.skeleton-lines .short{width:58%}@keyframes skeleton{to{background-position:-200% 0}}
+@media(max-width:650px){.page-head h2{font-size:28px}.exercise-grid{grid-template-columns:1fr 1fr}.exercise-card-rich .exercise-content{padding:11px}.exercise-card-rich p{font-size:10px}.exercise-card-footer{font-size:9px}.exercise-fav{width:32px;height:32px}}
+@media(max-width:420px){.exercise-grid{grid-template-columns:1fr}.hub-tab{font-size:11px;padding:8px 10px}.library-subtitle{font-size:11px}}
+
+/* ===== Progression Intelligence v2.15 ===== */
+.progression-overview{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:10px 0 12px}.overview-card{padding:15px;border:1px solid var(--line);background:var(--surface);border-radius:16px;min-width:0}.overview-card small{display:block;font-size:9px;font-weight:900;color:var(--muted);letter-spacing:.08em}.overview-card b{display:block;font-size:24px;line-height:1.1;margin-top:7px}.overview-card span{display:block;font-size:10px;color:var(--muted);margin-top:4px}.insight-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:18px}.insight-card{display:flex;gap:10px;align-items:flex-start;padding:13px;border-radius:15px;border:1px solid var(--line);background:var(--surface)}.insight-card svg{width:18px;height:18px;flex:0 0 auto;color:var(--accent)}.insight-card.attention svg{color:#ffb84d}.insight-card.positive svg{color:#45d483}.insight-card div{min-width:0}.insight-card b,.insight-card span{display:block}.insight-card b{font-size:11px}.insight-card span{font-size:10px;line-height:1.45;color:var(--muted);margin-top:3px}
+@media(max-width:700px){.progression-overview{grid-template-columns:repeat(2,1fr)}.insight-grid{grid-template-columns:1fr}}@media(max-width:420px){.overview-card{padding:12px}.overview-card b{font-size:20px}}
+
+.training-engine{border:1px solid var(--line);background:linear-gradient(145deg,var(--surface),var(--panel));border-radius:20px;padding:16px;margin-bottom:18px;box-shadow:0 10px 30px rgba(0,0,0,.08)}
+.engine-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start;padding-bottom:12px;border-bottom:1px solid var(--line)}
+.engine-head h3{margin:3px 0 4px}.engine-head p{margin:0;max-width:650px;font-size:11px}
+.engine-list{display:grid;gap:8px;margin-top:12px}.engine-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px 12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:15px;background:var(--surface)}
+.engine-main b,.engine-main small{display:block}.engine-main small{font-size:10px;color:var(--muted);margin-top:3px}.engine-action{min-width:105px;text-align:right}.engine-action strong,.engine-action span{display:block}.engine-action strong{font-size:10px;letter-spacing:.08em}.engine-action span{font-size:16px;font-weight:900;margin-top:2px}.engine-action.up{color:#42d486}.engine-action.down{color:#ffb84d}.engine-action.hold{color:var(--accent)}.engine-action.new{color:#7eb6ff}.engine-row p{grid-column:1/-1;margin:0;color:var(--muted);font-size:10px;line-height:1.45}.engine-foot{display:flex;justify-content:space-between;gap:12px;margin-top:10px;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.05em}
+@media(max-width:560px){.engine-head{flex-direction:column}.engine-head button{width:100%}.engine-row{grid-template-columns:1fr}.engine-action{text-align:left}.engine-foot{flex-direction:column;gap:3px}}
+
+
+/* ===== App Update Gate v2.17 ===== */
+.app-update-gate{position:fixed;inset:0;z-index:99999;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 50% 20%,color-mix(in srgb,var(--accent) 18%,#07111f),#05070b 58%);color:#fff}
+.app-update-gate.hidden{display:none}
+.app-update-card{width:min(430px,100%);padding:30px 24px 24px;text-align:center;border:1px solid #ffffff16;border-radius:28px;background:linear-gradient(155deg,#111722f5,#090c12f5);box-shadow:0 30px 90px #0009;backdrop-filter:blur(20px)}
+.app-update-logo{width:76px;height:76px;margin:0 auto 16px;border-radius:22px;overflow:hidden;box-shadow:0 14px 35px #0007}.app-update-logo img{width:100%;height:100%;display:block}
+.app-update-eyebrow{font-size:10px;letter-spacing:.18em;font-weight:900;opacity:.65}.app-update-card h2{margin:7px 0 8px;font-size:25px}.app-update-card p{margin:0 auto 20px;max-width:330px;color:#aeb7c7;font-size:12px;line-height:1.55}
+.app-update-progress{height:8px;border-radius:999px;overflow:hidden;background:#ffffff10;border:1px solid #ffffff0d}.app-update-progress span{display:block;width:35%;height:100%;border-radius:inherit;background:var(--accent,#8b5cf6);animation:updateProgress 1.2s ease-in-out infinite}
+.app-update-status{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:14px;font-size:11px;font-weight:800}.app-update-status .app-update-spinner{width:14px;height:14px;border:2px solid #ffffff26;border-top-color:var(--accent,#8b5cf6);border-radius:50%;animation:spin .8s linear infinite}.app-update-card small{display:block;margin-top:14px;color:#687386;font-size:9px}
+@keyframes updateProgress{0%{transform:translateX(-130%);width:25%}50%{width:55%}100%{transform:translateX(250%);width:25%}}@keyframes spin{to{transform:rotate(360deg)}}
+body.app-updating>*:not(#appUpdateGate){visibility:hidden}

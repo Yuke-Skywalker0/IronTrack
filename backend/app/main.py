@@ -18,6 +18,11 @@ from .db import Store
 from .security import hash_password,verify_password,create_token,decode_token,hash_token
 
 load_dotenv(); store=Store()
+LOCAL_EXERCISES=[]
+try:
+    with open(os.path.join(os.path.dirname(__file__),'exercises_local.json'),encoding='utf-8') as f: LOCAL_EXERCISES=json.load(f)
+except Exception: LOCAL_EXERCISES=[]
+
 
 def ensure_admin():
     email=os.getenv('ADMIN_EMAIL','luca@mail.com').strip().lower(); pw=os.getenv('ADMIN_PASSWORD','123')
@@ -35,7 +40,7 @@ async def lifespan(app):
         if not os.getenv('MONGODB_URI','').strip():
             raise RuntimeError('MONGODB_URI è obbligatorio in produzione')
     ensure_admin(); yield
-app=FastAPI(title='IronTrack API',version='2.14.0',lifespan=lifespan)
+app=FastAPI(title='IronTrack API',version='2.15.0',lifespan=lifespan)
 origins=[x.strip() for x in os.getenv('FRONTEND_ORIGIN','http://localhost:5500,http://127.0.0.1:5500').split(',') if x.strip()]
 app.add_middleware(CORSMiddleware,allow_origins=origins,allow_origin_regex=r'^https?://(localhost|127\.0\.0\.1)(:\d+)?$' if os.getenv('ENVIRONMENT','development')!='production' else None,allow_credentials=True,allow_methods=['*'],allow_headers=['*'])
 
@@ -88,7 +93,7 @@ def health():
         try: store.db.command('ping')
         except Exception: db_ok=False
     if not db_ok: raise HTTPException(503,'Database non raggiungibile')
-    return {'ok':True,'service':'irontrack-api','version':'2.12.0','time':datetime.now(timezone.utc).isoformat(),'database':'mongodb' if store.mongo else 'sqlite','database_ok':db_ok}
+    return {'ok':True,'service':'irontrack-api','version':'2.14.1','time':datetime.now(timezone.utc).isoformat(),'database':'mongodb' if store.mongo else 'sqlite','database_ok':db_ok}
 @app.post('/api/auth/login')
 def login(body:Login):
     u=store.user_by_email(body.email)
@@ -248,6 +253,111 @@ def progression(user=Depends(current_user)):
     out.sort(key=lambda z:z['name'].lower())
     return {'exercises':out,'total_prs':len(out),'updated_at':datetime.now(timezone.utc).isoformat()}
 
+
+@app.get('/api/progression/overview')
+def progression_overview(user=Depends(current_user)):
+    """Training intelligence overview: workload, frequency, estimated strength and actionable insights."""
+    ss=store.sessions(user['id'])
+    now=datetime.now(timezone.utc)
+    parsed=[]
+    for s in ss:
+        try: dt=datetime.fromisoformat((s.get('started_at') or '').replace('Z','+00:00'))
+        except Exception: continue
+        if dt.tzinfo is None: dt=dt.replace(tzinfo=timezone.utc)
+        sets=[]
+        for x in s.get('sets',[]):
+            try:
+                w=float(x.get('weight') or 0); reps=int(x.get('reps') or 0); rir=float(x.get('rir')) if x.get('rir') is not None else None
+            except Exception: continue
+            if w>0 and reps>0: sets.append({'weight':w,'reps':reps,'rir':rir,'exercise_id':x.get('exercise_id'),'name':x.get('exercise_name') or 'Esercizio'})
+        parsed.append((dt,sets))
+    parsed.sort(key=lambda z:z[0])
+    def volume(days=None):
+        cutoff=now-timedelta(days=days) if days else None
+        return round(sum(x['weight']*x['reps'] for dt,sets in parsed if not cutoff or dt>=cutoff for x in sets),1)
+    workouts7=sum(1 for dt,_ in parsed if dt>=now-timedelta(days=7))
+    workouts30=sum(1 for dt,_ in parsed if dt>=now-timedelta(days=30))
+    active_dates={dt.date() for dt,_ in parsed if dt>=now-timedelta(days=30)}
+    streak=0
+    cursor=now.date()
+    if cursor not in active_dates: cursor=cursor-timedelta(days=1)
+    while cursor in active_dates:
+        streak+=1; cursor-=timedelta(days=1)
+    # Per-exercise estimated 1RM (Epley) and recent trend.
+    by={}
+    for dt,sets in parsed:
+        for x in sets:
+            key=x['exercise_id'] or x['name']; e=by.setdefault(key,{'name':x['name'],'id':x['exercise_id'],'rows':[]})
+            e['rows'].append({'date':dt.isoformat(),'weight':x['weight'],'reps':x['reps'],'rir':x['rir'],'e1rm':x['weight']*(1+x['reps']/30)})
+    ex=[]
+    for e in by.values():
+        rows=e['rows']; rows.sort(key=lambda z:z['date']); recent=rows[-10:]; best=max(rows,key=lambda z:z['e1rm'])
+        first=recent[0]['e1rm']; last=recent[-1]['e1rm']; change=round(((last-first)/first*100),1) if first else 0
+        ex.append({'exercise_id':e['id'],'name':e['name'],'estimated_1rm':round(best['e1rm'],1),'recent_1rm':round(last,1),'trend_pct':change,'sets':len(rows),'last_date':rows[-1]['date']})
+    ex.sort(key=lambda z:z['sets'],reverse=True)
+    avg_rir=[]
+    for _,sets in parsed[-10:]: avg_rir += [x['rir'] for x in sets if x['rir'] is not None]
+    avg_rir=round(sum(avg_rir)/len(avg_rir),1) if avg_rir else None
+    insights=[]
+    if workouts7==0: insights.append({'type':'attention','title':'Riparti con la costanza','text':'Non risultano allenamenti negli ultimi 7 giorni.'})
+    elif workouts7<2: insights.append({'type':'neutral','title':'Frequenza bassa','text':f'{workouts7} allenamento negli ultimi 7 giorni.'})
+    else: insights.append({'type':'positive','title':'Buona continuità','text':f'{workouts7} allenamenti negli ultimi 7 giorni.'})
+    v7=volume(7); v30=volume(30)
+    if v30 and v7>v30/4*1.5: insights.append({'type':'attention','title':'Carico recente elevato','text':'Il volume dell’ultima settimana è sensibilmente sopra la media settimanale del periodo di 30 giorni.'})
+    elif v30 and v7>0: insights.append({'type':'neutral','title':'Volume sotto controllo','text':f'{v7:,.0f} kg negli ultimi 7 giorni su {v30:,.0f} kg negli ultimi 30.'})
+    if avg_rir is not None:
+        insights.append({'type':'neutral','title':'RIR medio','text':f'{avg_rir} RIR medio nelle ultime serie registrate.'})
+    return {'workouts_7d':workouts7,'workouts_30d':workouts30,'volume_7d':v7,'volume_30d':v30,'streak_days':streak,'average_rir':avg_rir,'exercises':ex[:12],'insights':insights,'updated_at':now.isoformat()}
+
+
+@app.get('/api/training-engine')
+def training_engine(routine_id: Optional[str] = Query(None), user=Depends(current_user)):
+    """Generate transparent next-session recommendations from the user's own recent training data."""
+    ss=store.sessions(user['id'])
+    routines=store.routines(user['id'])
+    selected=None
+    if routine_id:
+        selected=next((r for r in routines if r.get('id')==routine_id),None)
+    if not selected and routines:
+        selected=routines[0]
+    targets=[]
+    if selected:
+        for day in selected.get('days',[]):
+            for e in day.get('exercises',[]):
+                targets.append({'exercise_id':e.get('exerciseId') or e.get('id'),'name':e.get('name') or 'Esercizio','sets':int(e.get('sets') or 3),'reps':str(e.get('reps') or '8-12'),'rir':e.get('rir',1)})
+    history={}
+    for sess in ss:
+        for x in sess.get('sets',[]):
+            key=x.get('exercise_id') or x.get('exercise_name')
+            if not key: continue
+            try: w=float(x.get('weight') or 0); reps=int(x.get('reps') or 0); rir=float(x.get('rir')) if x.get('rir') is not None and x.get('rir')!='' else None
+            except Exception: continue
+            if w>0 and reps>0: history.setdefault(key,[]).append({'weight':w,'reps':reps,'rir':rir,'date':sess.get('started_at') or ''})
+    def bounds(rep):
+        m=__import__('re').search(r'(\d+)\s*(?:-|–|to)\s*(\d+)',str(rep))
+        if m:return int(m.group(1)),int(m.group(2))
+        n=int(__import__('re').search(r'\d+',str(rep)).group()) if __import__('re').search(r'\d+',str(rep)) else 8
+        return n,n
+    recommendations=[]
+    for t in targets:
+        key=t['exercise_id'] or t['name']; rows=history.get(key,[])
+        if not rows:
+            recommendations.append({**t,'action':'start','suggested_weight':0,'target_reps':t['reps'],'confidence':'new','reason':'Nessuno storico: registra la prima esposizione per costruire una progressione.'}); continue
+        rows=sorted(rows,key=lambda z:z['date']); recent=rows[-6:]; last=rows[-1]; mn,mx=bounds(t['reps'])
+        avg_rir=sum(r['rir'] for r in recent if r['rir'] is not None)/max(1,len([r for r in recent if r['rir'] is not None]))
+        recent_reps=sum(r['reps'] for r in recent)/len(recent)
+        weight=last['weight']; step=2.5 if weight<60 else 5.0
+        if recent_reps>=mx and (last['rir'] is None or last['rir']<=2):
+            action='increase'; suggested=weight+step; reason=f'Hai raggiunto il limite alto ({mx} reps) con margine adeguato.'
+        elif recent_reps<mn:
+            action='reduce'; suggested=max(step,weight-step); reason=f'La media recente è sotto il minimo ({mn} reps): riduci il carico e ricostruisci le reps.'
+        else:
+            action='maintain'; suggested=weight; reason=f'Resta nel range {mn}-{mx} e prova ad aggiungere 1 rep prima di aumentare il carico.'
+        if last['rir'] is not None and last['rir']<=0 and action=='increase':
+            action='maintain'; suggested=weight; reason='Ultima serie molto vicina al cedimento: mantieni il carico e consolida.'
+        recommendations.append({**t,'action':action,'suggested_weight':round(suggested,1),'target_reps':t['reps'],'recent_average_reps':round(recent_reps,1),'recent_average_rir':round(avg_rir,1) if any(r['rir'] is not None for r in recent) else None,'last_weight':weight,'last_reps':last['reps'],'confidence':'high' if len(recent)>=3 else 'medium','reason':reason})
+    return {'routine':selected.get('name') if selected else None,'routine_id':selected.get('id') if selected else None,'recommendations':recommendations,'method':'double_progression + recent RIR','generated_at':datetime.now(timezone.utc).isoformat()}
+
 @app.get('/api/measurements')
 def measurements(user=Depends(current_user)):return store.measurements(user['id'])
 @app.post('/api/measurements')
@@ -291,23 +401,59 @@ async def exercisedb_request(path,params=None):
         try:
             r=await client.get(f'{base}{path}',params=params);r.raise_for_status();return r.json()
         except Exception as e:raise HTTPException(502,f'ExerciseDB non raggiungibile: {e}')
+
+def _local_matches(q='',bodyPart='',equipment='',target=''):
+    q=q.strip().lower(); bp=bodyPart.strip().lower(); eq=equipment.strip().lower(); tg=target.strip().lower()
+    def ok(x):
+        hay=' '.join([x.get('name',''),x.get('overview',''),x.get('description',''),' '.join(x.get('keywords',[]))]).lower()
+        return (not q or q in hay) and (not bp or any(bp==str(v).lower() for v in x.get('bodyParts',[]))) and (not eq or any(eq in str(v).lower() for v in x.get('equipments',[]))) and (not tg or any(tg in str(v).lower() for v in x.get('targetMuscles',[])+x.get('secondaryMuscles',[])))
+    return [x for x in LOCAL_EXERCISES if ok(x)]
+
 @app.get('/api/exercises')
 async def exercises(q:str='',bodyPart:str='',equipment:str='',target:str='',limit:int=48,offset:int=0,user=Depends(current_user)):
-    p={'limit':min(max(limit,1),100),'offset':max(offset,0)}
+    limit=min(max(limit,1),100); offset=max(offset,0)
+    remote=[]; remote_ok=True
+    remote_limit=max(1,limit-12)
+    p={'limit':remote_limit,'offset':offset}
     if q:p['search']=q
     if bodyPart:p['bodyPart']=bodyPart
     if equipment:p['equipment']=equipment
     if target:p['target']=target
-    d=await exercisedb_request('/exercises',p)
-    if isinstance(d,dict) and 'data' in d:d['data']=[public_exercise(x) for x in d['data']]
-    elif isinstance(d,list):d=[public_exercise(x) for x in d]
-    return d
+    try:
+        d=await exercisedb_request('/exercises',p)
+        remote=d.get('data',[]) if isinstance(d,dict) else (d if isinstance(d,list) else [])
+        remote=[public_exercise(x) for x in remote]
+    except HTTPException:
+        remote_ok=False
+    local=_local_matches(q,bodyPart,equipment,target)
+    # A small curated slice is mixed into every page so the app is not dependent on one provider.
+    local_page=local[(offset//max(remote_limit,1))*12:(offset//max(remote_limit,1))*12+12]
+    seen={str(x.get('id') or x.get('exerciseId')) for x in remote}
+    page=remote+[x for x in local_page if str(x.get('id') or x.get('exerciseId')) not in seen]
+    if not page and local and not remote_ok:
+        page=local[offset:offset+limit]
+    return {'data':page[:limit],'count_estimate':1500+len(LOCAL_EXERCISES),'hasMore':len(page)>=min(limit,remote_limit),'sources':{'exercisedb':remote_ok,'irontrack_curated':bool(local)}}
+
 @app.get('/api/exercises/{exercise_id}')
-async def exercise(exercise_id:str,user=Depends(current_user)):return public_exercise(await exercisedb_request('/exercises/'+exercise_id))
+async def exercise(exercise_id:str,user=Depends(current_user)):
+    local=next((x for x in LOCAL_EXERCISES if str(x.get('id') or x.get('exerciseId'))==exercise_id),None)
+    if local:return public_exercise(local)
+    return public_exercise(await exercisedb_request('/exercises/'+exercise_id))
+
 @app.get('/api/exercises-meta/{kind}')
 async def exercise_meta(kind:str,user=Depends(current_user)):
     if kind not in {'bodyparts','equipment','targets'}:raise HTTPException(400,'Filtro non valido')
-    return await exercisedb_request('/'+kind)
+    try: d=await exercisedb_request('/'+kind)
+    except HTTPException: d=[]
+    remote=d.get('data',[]) if isinstance(d,dict) else (d if isinstance(d,list) else [])
+    if kind=='bodyparts': local=sorted({v for x in LOCAL_EXERCISES for v in x.get('bodyParts',[])})
+    elif kind=='equipment': local=sorted({v for x in LOCAL_EXERCISES for v in x.get('equipments',[])})
+    else: local=sorted({v for x in LOCAL_EXERCISES for v in x.get('targetMuscles',[])})
+    vals=[]; seen=set()
+    for item in list(remote)+local:
+        name=item.get('name') if isinstance(item,dict) else item
+        if name and str(name).lower() not in seen: seen.add(str(name).lower()); vals.append({'name':name})
+    return vals
 
 
 def local_ai_plan(b:AIIn):
